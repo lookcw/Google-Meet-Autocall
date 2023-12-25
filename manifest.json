@@ -1,0 +1,25 @@
+{
+    "name": "Meet Autocall",
+    "version": "1.0",
+    "manifest_version": 3,
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "background": {
+        "service_worker": "service-worker.js"
+    },
+    "permissions": [
+        "alarms",
+        "background",
+        "identity",
+        "identity.email"
+    ],
+    "oauth2": {
+        "client_id": "137332974021-tqu2121q32nb1cvqehs1fuc2lttenllk.apps.googleusercontent.com",
+        "scopes": [
+            "https://www.googleapis.com/auth/calendar",
+            "https://www.googleapis.com/auth/directory.readonly"
+            
+        ]
+    }
+}
