@@ -20,9 +20,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 const setUpcomingAlarms = () => {
   chrome.identity.getAuthToken({ 'interactive': true }, function (token) {
     chrome.identity.getProfileUserInfo(function (info) {
+    if (!info.email) {
+      alert("please enable sync in google chrome!")
+    }
       const calendarRequestUrl = getEventListRequestUrl(info.email, getCalendarEventListParams());
       fetch(calendarRequestUrl, getFetchHeaders(token))
-        .then((response) => response.json())
+        .then((response) => {console.log(response);return response.json()})
         .then(function (eventData) {
           const upcomingMeetingEvents = eventData.items.filter(isEventAMeeting).filter(isEventBeforeNow)
           const acceptedMeetings = upcomingMeetingEvents.filter(event => isEventAccepted(event, info.email)).map(getTimeAndMeetingUrl)
@@ -110,3 +113,5 @@ const openRingToneUrl = () => {
     })
 
 }
+
+setUpcomingAlarms();
