@@ -75,7 +75,6 @@ const isEventBeforeNow = (event) => {
 }
 
 const isEventAccepted = (event, selfEmail) => {
-  console.log("ahh")
   console.log(event.attendees)
   console.log(event.attendees.some(attendee => attendee.email === selfEmail && attendee.responseStatus !== 'declined'))
   console.log(selfEmail)
