@@ -14,10 +14,10 @@
         "identity",
         "identity.email"
     ],
-    "oauth2": {
-        "client_id": "137332974021-e63kkdj4ek3703mjggm94730nb67ql90.apps.googleusercontent.com",
-        "scopes": [
-            "https://www.googleapis.com/auth/calendar.readonly"
-            ]
-    }
+"oauth2": {
+    "client_id": "137332974021-e63kkdj4ek3703mjggm94730nb67ql90.apps.googleusercontent.com",
+    "scopes": [
+        "https://www.googleapis.com/auth/calendar.readonly"
+    ]
+}
 }
