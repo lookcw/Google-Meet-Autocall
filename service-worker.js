@@ -24,24 +24,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'toggleAlarms') {
     chrome.storage.sync.set({ [ALARM_ENABLED_KEY]: message.enabled });
     if (!message.enabled) {
-      chrome.alarms.getAll(alarms => {
-        alarms.forEach(alarm => {
-          if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
-            chrome.alarms.clear(alarm.name);
-          }
-        });
-      });
+      clearAllAlarms();
     } else {
       setUpcomingAlarms();
     }
   } else if (message.type === 'minutesBeforeChanged') {
-    chrome.alarms.getAll(alarms => {
-      alarms.forEach(alarm => {
-        if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
-          chrome.alarms.clear(alarm.name);
-        }
-      });
-    });
+    clearAllAlarms();
     setUpcomingAlarms();
   }
 });
@@ -58,6 +46,16 @@ const setUpcomingAlarms = () => {
         .then(function (eventData) {
           createAlarmsFromCalendarEvents(eventData, info.email.toLowerCase())
         });
+    });
+  });
+}
+
+const clearAllAlarms = () => {
+  chrome.alarms.getAll(alarms => {
+    alarms.forEach(alarm => {
+      if (alarm.name.startsWith(MEET_ALARM_PREFIX) || alarm.name.startsWith(ZOOM_ALARM_PREFIX)) {
+        chrome.alarms.clear(alarm.name);
+      }
     });
   });
 }
@@ -96,8 +94,12 @@ const isEventAZoomMeeting = (event) => {
   return event?.conferenceData?.conferenceSolution?.name === 'Zoom Meeting'
 }
 
+const isEventAGoogleMeeting = (event) => {
+  return 'hangoutLink' in event
+}
+
 const isEventAMeeting = (event) => {
-  return 'hangoutLink' in event || isEventAZoomMeeting(event)
+  return isEventAGoogleMeeting(event) || isEventAZoomMeeting(event)
 }
 
 const isEventAfterNow = (event) => {
@@ -122,7 +124,8 @@ const getTimeAndMeetingUrl = (event) => {
   return 'start' in event && (isEventAMeeting(event) || isEventAZoomMeeting(event)) ?
     {
       time: event.start.dateTime,
-      url: isEventAZoomMeeting(event) ? getZoomMeetingUrl(event) : getGoogleMeetingUrl(event)
+      url: isEventAZoomMeeting(event) ? getZoomMeetingUrl(event) : getGoogleMeetingUrl(event),
+      type: isEventAZoomMeeting(event) ? 'zoom' : 'google'
     }
     :
     {}
