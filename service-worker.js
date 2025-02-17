@@ -1,10 +1,15 @@
 const MEET_ALARM_PREFIX = "meet-alarm:";
 const ADD_UPCOMING_ALARMS_ALARM_NAME = "add-upcoming-alarms";
+const ALARM_ENABLED_KEY = 'alarmEnabled';
+const DEFAULT_MINUTES_BEFORE = 0;
 
 chrome.alarms.create(ADD_UPCOMING_ALARMS_ALARM_NAME, { periodInMinutes: 5 });
 
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  const { alarmEnabled = true } = await chrome.storage.sync.get(ALARM_ENABLED_KEY);
+  
+  if (!alarmEnabled) return;
 
-chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
     const meetUrl = alarm.name.substring(MEET_ALARM_PREFIX.length);
     chrome.tabs.create({ url: meetUrl });
@@ -13,9 +18,33 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   else if (alarm.name === ADD_UPCOMING_ALARMS_ALARM_NAME) {
     setUpcomingAlarms();
   }
-}
-);
+});
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'toggleAlarms') {
+    chrome.storage.sync.set({ [ALARM_ENABLED_KEY]: message.enabled });
+    if (!message.enabled) {
+      chrome.alarms.getAll(alarms => {
+        alarms.forEach(alarm => {
+          if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
+            chrome.alarms.clear(alarm.name);
+          }
+        });
+      });
+    } else {
+      setUpcomingAlarms();
+    }
+  } else if (message.type === 'minutesBeforeChanged') {
+    chrome.alarms.getAll(alarms => {
+      alarms.forEach(alarm => {
+        if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
+          chrome.alarms.clear(alarm.name);
+        }
+      });
+    });
+    setUpcomingAlarms();
+  }
+});
 
 const setUpcomingAlarms = () => {
   chrome.identity.getAuthToken({ 'interactive': true }, function (token) {
@@ -25,7 +54,7 @@ const setUpcomingAlarms = () => {
     }
       const calendarRequestUrl = getEventListRequestUrl(info.email, getCalendarEventListParams());
       fetch(calendarRequestUrl, getFetchHeaders(token))
-        .then((response) => {console.log(response);return response.json()})
+        .then((response) => {return response.json()})
         .then(function (eventData) {
           console.log(eventData)
           createAlarmsFromCalendarEvents(eventData, info.email.toLowerCase())
@@ -33,8 +62,6 @@ const setUpcomingAlarms = () => {
     });
   });
 }
-
-
 
 const getFetchHeaders = (token) => {
   return {
@@ -66,52 +93,73 @@ const getEventListRequestUrl = (calendarId, params) => {
     + new URLSearchParams(params).toString();
 }
 
-const isEventAMeeting = (event) => {
-  return 'hangoutLink' in event
+const isEventAZoomMeeting = (event) => {
+  console.log(event)
+  console.log("is zoom meeting", event?.conferenceData?.conferenceSolution?.name)
+  return event?.conferenceData?.conferenceSolution?.name === 'Zoom Meeting'
 }
 
-const isEventBeforeNow = (event) => {
+const isEventAMeeting = (event) => {
+  return 'hangoutLink' in event || isEventAZoomMeeting(event)
+}
+
+const isEventAfterNow = (event) => {
   return new Date(event.start.dateTime) > new Date()
 }
 
+const getZoomMeetingUrl = (event) => {
+  const entryPoints = event.conferenceData.entryPoints
+  return entryPoints.find(entryPoint => entryPoint.entryPointType === 'video')?.uri
+}
+
+const getGoogleMeetingUrl = (event) => {
+  return event.hangoutLink
+}
+
 const isEventAccepted = (event, selfEmail) => {
-  console.log(event.attendees)
-  console.log(event.attendees.some(attendee => attendee.email === selfEmail && attendee.responseStatus !== 'declined'))
-  console.log(selfEmail)
   const isConferenceAndAccepted = event.attendees && event.attendees.some(attendee => attendee.email === selfEmail && attendee.responseStatus !== 'declined')
-  console.log(isConferenceAndAccepted)
   return event.status === 'confirmed' && (!event.attendees || isConferenceAndAccepted)
 }
 
 const getTimeAndMeetingUrl = (event) => {
-  return 'start' in event && 'hangoutLink' in event ?
+  return 'start' in event && (isEventAMeeting(event) || isEventAZoomMeeting(event)) ?
     {
       time: event.start.dateTime,
-      url: event.hangoutLink
+      url: isEventAZoomMeeting(event) ? getZoomMeetingUrl(event) : getGoogleMeetingUrl(event)
     }
     :
     {}
 }
 
+const createAlarmsFromCalendarEvents = async (events, email) => {
+  const { minutesBefore = DEFAULT_MINUTES_BEFORE } = await chrome.storage.sync.get('minutesBefore');
+  const msOffset = minutesBefore * 60 * 1000; // Convert minutes to milliseconds
 
-const createAlarmsFromCalendarEvents = (events, email) => {
-  const upcomingMeetingEvents = events.items.filter(isEventAMeeting).filter(isEventBeforeNow)
-  const acceptedMeetings = upcomingMeetingEvents.filter(event => isEventAccepted(event, email)).map(getTimeAndMeetingUrl)
+  const upcomingMeetingEvents = events.items.filter(isEventAMeeting).filter(isEventAfterNow);
+  const acceptedMeetings = upcomingMeetingEvents
+    .filter(event => isEventAccepted(event, email))
+    .map(getTimeAndMeetingUrl);
+
   for (const meeting of acceptedMeetings) {
-    const alarmName = MEET_ALARM_PREFIX + meeting.url;
-    const alarmTime = new Date(meeting.time);
+    if (!meeting.url) continue;
+    
+    const alarmPrefix = meeting.type === 'zoom' ? ZOOM_ALARM_PREFIX : MEET_ALARM_PREFIX;
+    const alarmName = alarmPrefix + meeting.url;
+    const meetingTime = new Date(meeting.time);
+    const alarmTime = new Date(meetingTime.getTime() - msOffset);
+    
     chrome.alarms.get(alarmName).then((alarm) => {
       if (!alarm) {
-      chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
-      console.log("alarm for " + alarmName + " created at " + alarmTime)
+        chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
+        console.log(`Alarm for ${alarmName} created at ${alarmTime} (${minutesBefore} minutes before ${meetingTime})`);
       }
     });
   }
+
   const declinedMeetings = upcomingMeetingEvents.filter(event => !isEventAccepted(event, email)).map(getTimeAndMeetingUrl)
   for (const meeting of declinedMeetings) {
     const alarmName = MEET_ALARM_PREFIX + meeting.url;
     chrome.alarms.clear(alarmName);
-    console.log("alarm for " + alarmName + " cleared")
   }
 }
 
@@ -123,5 +171,12 @@ const openRingToneUrl = () => {
     })
 
 }
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.sync.set({ 
+    alarmEnabled: true,
+    minutesBefore: DEFAULT_MINUTES_BEFORE
+  });
+});
 
 setUpcomingAlarms();
