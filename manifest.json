@@ -1,6 +1,6 @@
 {
     "name": "Video Call Calendar Auto Call",
-    "version": "1.1",
+    "version": "1.2",
     "manifest_version": 3,
     "action": {
         "default_popup": "popup.html"
@@ -15,10 +15,10 @@
         "identity.email",
         "storage"
     ],
-    "oauth2": {
-        "client_id": "137332974021-gfttt57kt0gt59vq3n292tg7j627vekb.apps.googleusercontent.com",
-        "scopes": [
-            "https://www.googleapis.com/auth/calendar.readonly"
-        ]
-    }
+"oauth2": {
+    "client_id": "137332974021-e63kkdj4ek3703mjggm94730nb67ql90.apps.googleusercontent.com",
+    "scopes": [
+        "https://www.googleapis.com/auth/calendar.readonly"
+    ]
+}
 }
