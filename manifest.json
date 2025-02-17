@@ -1,5 +1,5 @@
 {
-    "name": "Meet Autocall",
+    "name": "Video Call Calendar Auto Call",
     "version": "1.0",
     "manifest_version": 3,
     "action": {
@@ -15,9 +15,9 @@
         "identity.email"
     ],
     "oauth2": {
-        "client_id": "137332974021-tqu2121q32nb1cvqehs1fuc2lttenllk.apps.googleusercontent.com",
+        "client_id": "137332974021-e63kkdj4ek3703mjggm94730nb67ql90.apps.googleusercontent.com",
         "scopes": [
             "https://www.googleapis.com/auth/calendar.readonly"
-        ]
+            ]
     }
 }

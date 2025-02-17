@@ -27,24 +27,8 @@ const setUpcomingAlarms = () => {
       fetch(calendarRequestUrl, getFetchHeaders(token))
         .then((response) => {console.log(response);return response.json()})
         .then(function (eventData) {
-          const upcomingMeetingEvents = eventData.items.filter(isEventAMeeting).filter(isEventBeforeNow)
-          const acceptedMeetings = upcomingMeetingEvents.filter(event => isEventAccepted(event, info.email)).map(getTimeAndMeetingUrl)
-          for (const meeting of acceptedMeetings) {
-            const alarmName = MEET_ALARM_PREFIX + meeting.url;
-            const alarmTime = new Date(meeting.time);
-            chrome.alarms.get(alarmName).then((alarm) => {
-              if (!alarm) {
-              chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
-              console.log("alarm for " + alarmName + " created at " + alarmTime)
-              }
-            });
-          }
-          const declinedMeetings = upcomingMeetingEvents.filter(event => !isEventAccepted(event, info.email)).map(getTimeAndMeetingUrl)
-          for (const meeting of declinedMeetings) {
-            const alarmName = MEET_ALARM_PREFIX + meeting.url;
-            chrome.alarms.clear(alarmName);
-            console.log("alarm for " + alarmName + " cleared")
-          }
+          console.log(eventData)
+          createAlarmsFromCalendarEvents(eventData, info.email.toLowerCase())
         });
     });
   });
@@ -91,7 +75,12 @@ const isEventBeforeNow = (event) => {
 }
 
 const isEventAccepted = (event, selfEmail) => {
+  console.log("ahh")
+  console.log(event.attendees)
+  console.log(event.attendees.some(attendee => attendee.email === selfEmail && attendee.responseStatus !== 'declined'))
+  console.log(selfEmail)
   const isConferenceAndAccepted = event.attendees && event.attendees.some(attendee => attendee.email === selfEmail && attendee.responseStatus !== 'declined')
+  console.log(isConferenceAndAccepted)
   return event.status === 'confirmed' && (!event.attendees || isConferenceAndAccepted)
 }
 
@@ -103,6 +92,28 @@ const getTimeAndMeetingUrl = (event) => {
     }
     :
     {}
+}
+
+
+const createAlarmsFromCalendarEvents = (events, email) => {
+  const upcomingMeetingEvents = events.items.filter(isEventAMeeting).filter(isEventBeforeNow)
+  const acceptedMeetings = upcomingMeetingEvents.filter(event => isEventAccepted(event, email)).map(getTimeAndMeetingUrl)
+  for (const meeting of acceptedMeetings) {
+    const alarmName = MEET_ALARM_PREFIX + meeting.url;
+    const alarmTime = new Date(meeting.time);
+    chrome.alarms.get(alarmName).then((alarm) => {
+      if (!alarm) {
+      chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
+      console.log("alarm for " + alarmName + " created at " + alarmTime)
+      }
+    });
+  }
+  const declinedMeetings = upcomingMeetingEvents.filter(event => !isEventAccepted(event, email)).map(getTimeAndMeetingUrl)
+  for (const meeting of declinedMeetings) {
+    const alarmName = MEET_ALARM_PREFIX + meeting.url;
+    chrome.alarms.clear(alarmName);
+    console.log("alarm for " + alarmName + " cleared")
+  }
 }
 
 const openRingToneUrl = () => {
