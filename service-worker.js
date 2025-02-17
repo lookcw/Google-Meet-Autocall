@@ -56,7 +56,6 @@ const setUpcomingAlarms = () => {
       fetch(calendarRequestUrl, getFetchHeaders(token))
         .then((response) => {return response.json()})
         .then(function (eventData) {
-          console.log(eventData)
           createAlarmsFromCalendarEvents(eventData, info.email.toLowerCase())
         });
     });
@@ -94,8 +93,6 @@ const getEventListRequestUrl = (calendarId, params) => {
 }
 
 const isEventAZoomMeeting = (event) => {
-  console.log(event)
-  console.log("is zoom meeting", event?.conferenceData?.conferenceSolution?.name)
   return event?.conferenceData?.conferenceSolution?.name === 'Zoom Meeting'
 }
 
@@ -151,7 +148,6 @@ const createAlarmsFromCalendarEvents = async (events, email) => {
     chrome.alarms.get(alarmName).then((alarm) => {
       if (!alarm) {
         chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
-        console.log(`Alarm for ${alarmName} created at ${alarmTime} (${minutesBefore} minutes before ${meetingTime})`);
       }
     });
   }
