@@ -1,6 +1,7 @@
-const MEET_ALARM_PREFIX = "meet-alarm:";
+const MEET_ALARM_PREFIX = "meeting-alarm:";
 const ADD_UPCOMING_ALARMS_ALARM_NAME = "add-upcoming-alarms";
 const ALARM_ENABLED_KEY = 'alarmEnabled';
+const MINUTES_BEFORE_KEY = 'minutesBefore';
 const DEFAULT_MINUTES_BEFORE = 0;
 
 chrome.alarms.create(ADD_UPCOMING_ALARMS_ALARM_NAME, { periodInMinutes: 5 });
@@ -29,6 +30,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       setUpcomingAlarms();
     }
   } else if (message.type === 'minutesBeforeChanged') {
+    chrome.storage.sync.set({ [MINUTES_BEFORE_KEY]: message.minutesBefore });
     clearAllAlarms();
     setUpcomingAlarms();
   }
@@ -53,7 +55,7 @@ const setUpcomingAlarms = () => {
 const clearAllAlarms = () => {
   chrome.alarms.getAll(alarms => {
     alarms.forEach(alarm => {
-      if (alarm.name.startsWith(MEET_ALARM_PREFIX) || alarm.name.startsWith(ZOOM_ALARM_PREFIX)) {
+      if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
         chrome.alarms.clear(alarm.name);
       }
     });
@@ -125,7 +127,6 @@ const getTimeAndMeetingUrl = (event) => {
     {
       time: event.start.dateTime,
       url: isEventAZoomMeeting(event) ? getZoomMeetingUrl(event) : getGoogleMeetingUrl(event),
-      type: isEventAZoomMeeting(event) ? 'zoom' : 'google'
     }
     :
     {}
@@ -134,20 +135,16 @@ const getTimeAndMeetingUrl = (event) => {
 const createAlarmsFromCalendarEvents = async (events, email) => {
   const { minutesBefore = DEFAULT_MINUTES_BEFORE } = await chrome.storage.sync.get('minutesBefore');
   const msOffset = minutesBefore * 60 * 1000; // Convert minutes to milliseconds
-
   const upcomingMeetingEvents = events.items.filter(isEventAMeeting).filter(isEventAfterNow);
   const acceptedMeetings = upcomingMeetingEvents
     .filter(event => isEventAccepted(event, email))
     .map(getTimeAndMeetingUrl);
-
   for (const meeting of acceptedMeetings) {
     if (!meeting.url) continue;
-    
-    const alarmPrefix = meeting.type === 'zoom' ? ZOOM_ALARM_PREFIX : MEET_ALARM_PREFIX;
-    const alarmName = alarmPrefix + meeting.url;
+    const alarmName = MEET_ALARM_PREFIX + meeting.url;
     const meetingTime = new Date(meeting.time);
     const alarmTime = new Date(meetingTime.getTime() - msOffset);
-    
+    chrome.alarms.get(alarmName).then((alarm) => {
     chrome.alarms.get(alarmName).then((alarm) => {
       if (!alarm) {
         chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
