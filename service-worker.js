@@ -4,6 +4,9 @@ const ALARM_ENABLED_KEY = 'alarmEnabled';
 const MINUTES_BEFORE_KEY = 'minutesBefore';
 const DEFAULT_MINUTES_BEFORE = 0;
 
+const ZOOM_URL_REGEX = /https:\/\/[a-zA-Z0-9.-]+\.zoom\.us\/j\/\d+/;
+const TEAMS_URL_REGEX = /https:\/\/teams\.microsoft\.com\/l\/meetup-join\/[^\s"<>]+/;
+
 chrome.alarms.create(ADD_UPCOMING_ALARMS_ALARM_NAME, { periodInMinutes: 5 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -93,28 +96,64 @@ const getEventListRequestUrl = (calendarId, params) => {
 }
 
 const isEventAZoomMeeting = (event) => {
-  return event?.conferenceData?.conferenceSolution?.name === 'Zoom Meeting'
+  if (event?.conferenceData?.conferenceSolution?.name === 'Zoom Meeting') {
+    return true;
+  }
+  const match = event.description?.match(ZOOM_URL_REGEX);
+  return match ? match[0] : null;
 }
 
 const isEventAGoogleMeeting = (event) => {
   return 'hangoutLink' in event
 }
 
-const isEventAMeeting = (event) => {
-  return isEventAGoogleMeeting(event) || isEventAZoomMeeting(event)
+const isEventATeamsMeeting = (event) => {
+  return event.description?.includes('teams.microsoft.com/l/meetup-join');
 }
+
 
 const isEventAfterNow = (event) => {
   return new Date(event.start.dateTime) > new Date()
 }
 
 const getZoomMeetingUrl = (event) => {
-  const entryPoints = event.conferenceData.entryPoints
-  return entryPoints.find(entryPoint => entryPoint.entryPointType === 'video')?.uri
+  let zoomUrl;
+  
+  // First try conference data method
+  if (event?.conferenceData?.conferenceSolution?.name === 'Zoom Meeting') {
+    const entryPoints = event.conferenceData.entryPoints;
+    zoomUrl = entryPoints.find(entryPoint => entryPoint.entryPointType === 'video')?.uri;
+  }
+
+  // Fall back to description URL
+  if (!zoomUrl) {
+    const match = event.description?.match(ZOOM_URL_REGEX);
+    zoomUrl = match ? match[0] : null;
+  }
+
+  // Convert https:// Zoom URL to zoommtg:// protocol
+  if (zoomUrl) {
+    return zoomUrl.replace(
+      /https:\/\/([a-zA-Z0-9.-]+)\.zoom\.us\/j\/(\d+)(\?pwd=([a-zA-Z0-9]+))?/,
+      (match, domain, meetingId, _, password) => {
+        if (password) {
+          return `zoommtg://${domain}.zoom.us/join?action=join&confno=${meetingId}&pwd=${password}`;
+        }
+        return `zoommtg://${domain}.zoom.us/join?action=join&confno=${meetingId}`;
+      }
+    );
+  }
+  
+  return null;
 }
 
 const getGoogleMeetingUrl = (event) => {
   return event.hangoutLink
+}
+
+const getTeamsMeetingUrl = (event) => {
+  const match = event.description?.match(TEAMS_URL_REGEX);
+  return match ? match[0] : null;
 }
 
 const isEventAccepted = (event, selfEmail) => {
@@ -123,10 +162,14 @@ const isEventAccepted = (event, selfEmail) => {
 }
 
 const getTimeAndMeetingUrl = (event) => {
-  return 'start' in event && (isEventAMeeting(event) || isEventAZoomMeeting(event)) ?
+  return 'start' in event && isEventAMeeting(event) ?
     {
       time: event.start.dateTime,
-      url: isEventAZoomMeeting(event) ? getZoomMeetingUrl(event) : getGoogleMeetingUrl(event),
+      url: isEventAZoomMeeting(event) 
+        ? getZoomMeetingUrl(event) 
+        : isEventATeamsMeeting(event)
+        ? getTeamsMeetingUrl(event)
+        : getGoogleMeetingUrl(event),
     }
     :
     {}
@@ -134,22 +177,25 @@ const getTimeAndMeetingUrl = (event) => {
 
 const createAlarmsFromCalendarEvents = async (events, email) => {
   const { minutesBefore = DEFAULT_MINUTES_BEFORE } = await chrome.storage.sync.get('minutesBefore');
-  const msOffset = minutesBefore * 60 * 1000; // Convert minutes to milliseconds
+  const msOffset = minutesBefore * 60 * 1000;
   const upcomingMeetingEvents = events.items.filter(isEventAMeeting).filter(isEventAfterNow);
   const acceptedMeetings = upcomingMeetingEvents
     .filter(event => isEventAccepted(event, email))
     .map(getTimeAndMeetingUrl);
+    
   for (const meeting of acceptedMeetings) {
     if (!meeting.url) continue;
     const alarmName = MEET_ALARM_PREFIX + meeting.url;
     const meetingTime = new Date(meeting.time);
     const alarmTime = new Date(meetingTime.getTime() - msOffset);
-    chrome.alarms.get(alarmName).then((alarm) => {
-    chrome.alarms.get(alarmName).then((alarm) => {
+    try {
+      const alarm = await chrome.alarms.get(alarmName);
       if (!alarm) {
-        chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
+        await chrome.alarms.create(alarmName, { when: alarmTime.getTime() });
       }
-    });
+    } catch (error) {
+      console.error('Error creating alarm:', error);
+    }
   }
 
   const declinedMeetings = upcomingMeetingEvents.filter(event => !isEventAccepted(event, email)).map(getTimeAndMeetingUrl)
@@ -176,3 +222,7 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 setUpcomingAlarms();
+
+const keepAlive = () => setInterval(chrome.runtime.getPlatformInfo, 20e3);
+chrome.runtime.onStartup.addListener(keepAlive);
+keepAlive();
