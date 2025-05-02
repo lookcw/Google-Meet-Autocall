@@ -100,7 +100,7 @@ const isEventAZoomMeeting = (event) => {
     return true;
   }
   const match = event.description?.match(ZOOM_URL_REGEX);
-  return match ? match[0] : null;
+  return match ? true : false;
 }
 
 const isEventAGoogleMeeting = (event) => {
@@ -111,6 +111,9 @@ const isEventATeamsMeeting = (event) => {
   return event.description?.includes('teams.microsoft.com/l/meetup-join');
 }
 
+const isEventAMeeting = (event) => {
+  return isEventAGoogleMeeting(event) || isEventAZoomMeeting(event) || isEventATeamsMeeting(event);
+}
 
 const isEventAfterNow = (event) => {
   return new Date(event.start.dateTime) > new Date()
@@ -223,6 +226,15 @@ chrome.runtime.onInstalled.addListener(() => {
 
 setUpcomingAlarms();
 
-const keepAlive = () => setInterval(chrome.runtime.getPlatformInfo, 20e3);
+let keepAliveIntervalId = null;
+const keepAlive = () => {
+  // Clear any existing interval first
+  if (keepAliveIntervalId) {
+    clearInterval(keepAliveIntervalId);
+  }
+  keepAliveIntervalId = setInterval(chrome.runtime.getPlatformInfo, 20e3);
+  return keepAliveIntervalId;
+};
+
 chrome.runtime.onStartup.addListener(keepAlive);
 keepAlive();
