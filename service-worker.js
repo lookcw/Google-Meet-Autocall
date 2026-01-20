@@ -11,11 +11,18 @@ chrome.alarms.create(ADD_UPCOMING_ALARMS_ALARM_NAME, { periodInMinutes: 5 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   const { alarmEnabled = true } = await chrome.storage.sync.get(ALARM_ENABLED_KEY);
-  
   if (!alarmEnabled) return;
 
   if (alarm.name.startsWith(MEET_ALARM_PREFIX)) {
     const meetUrl = alarm.name.substring(MEET_ALARM_PREFIX.length);
+
+    // Validate meeting still exists and is accepted
+    const isValid = await validateMeetingBeforeFiring(meetUrl);
+    if (!isValid) {
+      console.log('Meeting no longer valid, skipping alarm:', meetUrl);
+      return;
+    }
+
     chrome.tabs.create({ url: meetUrl });
     openRingToneUrl();
   }
@@ -64,6 +71,41 @@ const clearAllAlarms = () => {
     });
   });
 }
+
+const validateMeetingBeforeFiring = (meetUrl) => {
+  return new Promise((resolve) => {
+    chrome.identity.getAuthToken({ 'interactive': false }, function(token) {
+      if (!token) {
+        resolve(false);
+        return;
+      }
+      chrome.identity.getProfileUserInfo(function(info) {
+        if (!info.email) {
+          resolve(false);
+          return;
+        }
+        const calendarRequestUrl = getEventListRequestUrl(info.email, getCalendarEventListParams());
+        fetch(calendarRequestUrl, getFetchHeaders(token))
+          .then((response) => response.json())
+          .then((eventData) => {
+            if (!eventData.items) {
+              resolve(false);
+              return;
+            }
+            const email = info.email.toLowerCase();
+            const validMeetings = eventData.items
+              .filter(isEventAMeeting)
+              .filter(event => isEventAccepted(event, email))
+              .map(getTimeAndMeetingUrl);
+
+            const meetingExists = validMeetings.some(m => m.url === meetUrl);
+            resolve(meetingExists);
+          })
+          .catch(() => resolve(false));
+      });
+    });
+  });
+};
 
 const getFetchHeaders = (token) => {
   return {
