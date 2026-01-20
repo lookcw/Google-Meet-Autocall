@@ -1,25 +1,18 @@
 {
-    "name": "Meet Autocall",
-    "version": "1.0",
-    "manifest_version": 3,
-    "action": {
-        "default_popup": "popup.html"
-    },
-    "background": {
-        "service_worker": "service-worker.js"
-    },
-    "permissions": [
-        "alarms",
-        "background",
-        "identity",
-        "identity.email"
-    ],
-    "oauth2": {
-        "client_id": "137332974021-tqu2121q32nb1cvqehs1fuc2lttenllk.apps.googleusercontent.com",
-        "scopes": [
-            "https://www.googleapis.com/auth/calendar",
-            "https://www.googleapis.com/auth/directory.readonly"
-            
-        ]
-    }
+   "action": {
+      "default_popup": "popup.html"
+   },
+   "background": {
+      "service_worker": "service-worker.js"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAinD+uihDHTHof9FHGqiAQVOF5TPipgOL59dUmJ82rl3anzTnUDVhWgAOborwnhIZ7fx03V773+tIQQonzAzP55apGuDKgVfYhp01WbS/TCCSVIWJ20Xa/bim0Z8PYQPoJs2O3otmKy3WAlrUEMSOuJK3DsuTv4EAvqLOVZPLadRUr65odu5VKWlOYOSemOXXleh3eSpdwhjZQp90Ce9dKGVhm7jUmiJBcy2o/c0VcxAAp8Yydn+gwgarqRR4+a+8IJmYvbkw4BIznkW+nGSdpSVUNPP4HJKq1rzr3ZC9VDyCwG+bQgpa/vg+T23GNs3dR4kagtNuLeZrxOYZbrbhqQIDAQAB",
+   "manifest_version": 3,
+   "name": "Video Call Calendar Auto Call",
+   "oauth2": {
+      "client_id": "137332974021-e63kkdj4ek3703mjggm94730nb67ql90.apps.googleusercontent.com",
+      "scopes": [ "https://www.googleapis.com/auth/calendar.readonly" ]
+   },
+   "permissions": [ "alarms", "background", "identity", "identity.email", "storage" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.4"
 }
